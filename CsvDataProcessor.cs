@@ -3,7 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Collections.Generic;
 using Model;
-using System.Text.RegularExpressions; // 添加 Model 命名空间的引用
+using System.Text.RegularExpressions; 
 
 public class CsvDataProcessor
 {
@@ -28,11 +28,11 @@ public class CsvDataProcessor
     private DateTime? earliestBeginningTime;
     private DateTime? latestEndingTime;
     private List<TimeSpan> allTotalTestingTimes;
-    private long _expectedGrossDie; // 新增字段，用于存储预期的 GrossDie
+    private long _expectedGrossDie; // 用于存储预期的 GrossDie
 
     public int ConsolidatedCoordinateDataCount => consolidatedCoordinateData.Count;
 
-    public CsvDataProcessor(long expectedGrossDie = 0) // 修改构造函数，接收 expectedGrossDie
+    public CsvDataProcessor(long expectedGrossDie = 0) // 接收 expectedGrossDie
     {
         consolidatedCoordinateData = new Dictionary<Tuple<double, double>, Dictionary<string, string>>();
         standardMetadata = new Dictionary<string, string>();
@@ -395,16 +395,16 @@ public class CsvDataProcessor
 
         if (parts.Length >= 3)
         {
-            // 假设Wafer ID是第三个部分 (索引为2)
+            
             waferId = parts[1];
 
-            // 假设RP值是倒数第三个部分
+            
             if ( parts[4].StartsWith("RP", StringComparison.OrdinalIgnoreCase))
             {
                 rpValue = parts[4];
             }
 
-            // 假设时间戳是最后一个部分
+            // 时间戳是最后一个部分
             if (parts.Length >= 1)
             {
                 string timestampStr = parts[parts.Length - 1];
@@ -475,7 +475,7 @@ public class CsvDataProcessor
     {
         foreach (var file in csvFiles)
         {
-            Console.WriteLine($"\n正在处理文件以获取最大最小值: {file.Name}");
+            
             try
             {
                 using (StreamReader reader = new StreamReader(file.FullName))
@@ -522,15 +522,9 @@ public class CsvDataProcessor
                                 GlobalMinY = Math.Min(GlobalMinY, yCoord);
                                 GlobalMaxY = Math.Max(GlobalMaxY, yCoord);
                             }
-                            else
-                            {
-                                Console.WriteLine($"警告：文件 {file.Name} 中有一行包含无效的坐标数据，已跳过：{line}");
-                            }
+                            
                         }
-                        else
-                        {
-                            Console.WriteLine($"警告：文件 {file.Name} 中有一行数据列数不足，已跳过：{line}");
-                        }
+                        
                     }
                 }
             }
@@ -547,11 +541,7 @@ public class CsvDataProcessor
         }
         else
         {
-            Console.WriteLine("\n所有CSV文件中的 X_COORD 和 Y_COORD 最大最小值：");
-            Console.WriteLine($"X_COORD 最小值: {GlobalMinX}");
-            Console.WriteLine($"X_COORD 最大值: {GlobalMaxX}");
-            Console.WriteLine($"Y_COORD 最小值: {GlobalMinY}");
-            Console.WriteLine($"Y_COORD 最大值: {GlobalMaxY}");
+            
             return true;
         }
     }
@@ -653,7 +643,7 @@ public class CsvDataProcessor
                         // 在尝试访问值之前检查数组边界
                         if (values.Length <= headerIndices["X_COORD"] || values.Length <= headerIndices["Y_COORD"])
                         {
-                            Console.WriteLine($"警告：文件 '{file.Name}' 中有一行数据列数不足，无法获取X_COORD或Y_COORD，已跳过：{line}");
+                           
                             continue; // 跳过此行
                         }
 
@@ -673,22 +663,12 @@ public class CsvDataProcessor
                             }
                             consolidatedCoordinateData[coord] = rowData;
                         }
-                        else
-                        {
-                            Console.WriteLine($"警告：文件 '{file.Name}' 中包含无效的X_COORD或Y_COORD数据行：{line}。跳过此行。");
-                        }
+                        
                     }
                     // 4. 处理非坐标行 (在主标题行未找到之前，或在坐标数据区域中遇到非数据行)
                     else 
                     {
-                        // IMPORTANT: 确保一行看起来像坐标标题的行，永远不会被添加到非坐标行中
-                        if (line.Contains("X_COORD") && line.Contains("Y_COORD"))
-                        {
-                            // 这一行看起来像坐标标题，但没有被上面的特定标题块处理。
-                            // 这意味着可能存在解析问题或文件格式不正确。记录并跳过，不将其视为非坐标数据。
-                            Console.WriteLine($"警告：文件 '{file.Name}' 中发现一行内容类似坐标标题 '{line}'，但未被正确分类或处理，已跳过。");
-                            continue; 
-                        }
+                        
 
                         string identifier = GetMetadataIdentifier(line);
                         if (!string.IsNullOrEmpty(identifier))
@@ -800,9 +780,9 @@ public class CsvDataProcessor
                 }
             }
 
-            writer.WriteLine(); // 添加一个空行分隔非坐标数据和坐标数据
-            writer.WriteLine(); // 再添加一个空行分隔非坐标数据和坐标数据
-            writer.WriteLine(); // 再添加一个空行分隔非坐标数据和坐标数据
+            writer.WriteLine(); 
+            writer.WriteLine(); 
+            writer.WriteLine(); 
 
             //  写入坐标列标题
             List<string> finalCoordinateHeaders = new List<string>(orderedCoordinateHeaders);
