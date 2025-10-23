@@ -2,25 +2,16 @@
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
-using Oracle.ManagedDataAccess.Client; // Added for Oracle database operations
-using Dapper; // Added for Dapper
-using Microsoft.Extensions.Configuration; // Added for configuration
-// using System.Runtime.InteropServices; // Removed for INI file reading
+using Oracle.ManagedDataAccess.Client; 
+using Dapper; 
+using Microsoft.Extensions.Configuration; 
+
 
 namespace CSV_SYSTEM
 {
     internal class Program
     {
-        // Removed DllImport for GetPrivateProfileString
-        // [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
-        // private static extern int GetPrivateProfileString(
-        //     string lpAppName,
-        //     string lpKeyName,
-        //     string lpDefault,
-        //     System.Text.StringBuilder lpReturnedString,
-        //     int nSize,
-        //     string lpFileName
-        // );
+        
 
         static void Main(string[] args)
         {
@@ -28,7 +19,7 @@ namespace CSV_SYSTEM
             IConfiguration configuration = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
                 .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-                .AddIniFile("devices.ini", optional: false, reloadOnChange: true) // Added for INI file
+                .AddIniFile("devices.ini", optional: false, reloadOnChange: true) 
                 .Build();
 
             string connectionString = configuration.GetConnectionString("DefaultConnection");
@@ -111,8 +102,7 @@ namespace CSV_SYSTEM
                     continue; // 跳过当前组，处理下一个组
                 }
 
-                Console.WriteLine("\n使用获取的坐标边界进行初始化...");
-                Console.WriteLine($"坐标边界: X [{processor.GlobalMinX}, {processor.GlobalMaxX}], Y [{processor.GlobalMinY}, {processor.GlobalMaxY}]");
+                
 
                 // 再次处理CSV文件，这次存储和更新数据
                 Console.WriteLine("\n开始处理CSV文件并存储数据...");
@@ -161,28 +151,6 @@ namespace CSV_SYSTEM
             return (device, wflot);
         }
 
-        // Removed ReadGrossDieFromIni method
-        // private static long ReadGrossDieFromIni(string deviceName, string iniFilePath)
-        // {
-        //     System.Text.StringBuilder temp = new System.Text.StringBuilder(255);
-        //     long grossDie = 0;
-
-        //     Console.WriteLine($"调试信息：尝试从INI文件读取。deviceName: '{deviceName}', iniFilePath: '{iniFilePath}'");
-
-        //     // 尝试读取特定设备配置
-        //     int bytesRead = GetPrivateProfileString(deviceName, "GrossDie", "0", temp, 255, iniFilePath);
-            
-        //     Console.WriteLine($"调试信息：GetPrivateProfileString 返回值 bytesRead: {bytesRead}");
-        //     Console.WriteLine($"调试信息：GetPrivateProfileString 读取到的原始值: '{temp.ToString()}'");
-
-        //     // 如果读取成功且值为有效数字，则返回
-        //     if (bytesRead > 0 && long.TryParse(temp.ToString(), out grossDie))
-        //     {
-        //         Console.WriteLine($"调试信息：成功解析 GrossDie: {grossDie}");
-        //         return grossDie;
-        //     }
-        //     Console.WriteLine("调试信息：未成功读取或解析 GrossDie。");
-        //     return 0; // 如果特定设备没有配置或者配置无效，则返回0
-        // }
+        
     }
 }
