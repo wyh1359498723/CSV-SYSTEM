@@ -1,20 +1,21 @@
+using CSV_SYSTEM_API; 
+using CSV_SYSTEM_API.Model; // Add this using statement
+using Dapper;
+using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using System;
-using System.IO;
-using System.Threading.Tasks;
 using Oracle.ManagedDataAccess.Client; 
-using Dapper; 
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
-
-using CSV_SYSTEM_API; 
-using CSV_SYSTEM_API.Model; // Add this using statement
+using System.Threading.Tasks;
 
 namespace CSV_SYSTEM_API.Controllers
 {
     [ApiController]
+    [EnableCors("AllowSpecificOrigin")]
     [Route("[controller]")]
     public class CsvProcessController : ControllerBase
     {
@@ -28,7 +29,7 @@ namespace CSV_SYSTEM_API.Controllers
             _logger = logger;
             _csvDataProcessorLogger = csvDataProcessorLogger;
         }
-
+        
         [HttpPost("process")]
         public async Task<IActionResult> ProcessCsv([FromBody] ProcessRequest request)
         {
