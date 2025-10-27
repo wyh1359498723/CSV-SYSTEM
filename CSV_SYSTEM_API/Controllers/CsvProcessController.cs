@@ -31,8 +31,9 @@ namespace CSV_SYSTEM_API.Controllers
         }
         
         [HttpPost("process")]
-        public async Task<IActionResult> ProcessCsv([FromBody] ProcessRequest request)
+        public async Task<ActionResult<List<string>>> ProcessCsv([FromBody] ProcessRequest request)
         {
+            List<string> generatedFilePaths = new List<string>(); // 新增：存储生成的文件路径列表
             if (string.IsNullOrEmpty(request.LotId))
             {
                 _logger.LogWarning("LotId 不能为空。");
@@ -125,12 +126,14 @@ namespace CSV_SYSTEM_API.Controllers
                 string outputFilePath = Path.Combine(outputBaseDirectory, outputFileName);
                 _logger.LogInformation($"\n正在生成合并后的CSV文件: {outputFilePath}");
                 processor.GenerateConsolidatedCsvFile(outputFilePath);
+                generatedFilePaths.Add(outputFilePath); // 新增：将生成的文件路径添加到列表中
 
                 _logger.LogInformation($"\n处理完成！合并组 '{mergeKey}' 已生成包含{processor.ConsolidatedCoordinateDataCount}条唯一坐标数据的CSV文件。");
             }
 
             _logger.LogInformation("\n所有合并组处理完毕！");
-            return Ok("CSV文件处理完成。");
+            string formattedPaths = string.Join("\n", generatedFilePaths); // 使用换行符连接列表中的所有路径
+            return Ok($"CSV文件生成完毕，以下是文件路径，请检查：\n{formattedPaths}"); // 修改：返回生成的文件路径列表
         }
 
         private (string device, string wflot) GetDeviceAndWFLot(string lotId, string connectionString)

@@ -314,7 +314,7 @@ namespace CSV_SYSTEM_API
                         {
                             long totalCount = aggregatedCounts.ContainsKey("Total") ? aggregatedCounts["Total"] : 0;
                             double percentage = (totalCount > 0) ? ((double)count / totalCount * 100) : 0.0;
-                            return $"{identifier}: {count} {percentage:F2}%";
+                            return $"{identifier}: {count}   {percentage:F2}%";
                         }
                     }
                     break;
@@ -755,6 +755,7 @@ namespace CSV_SYSTEM_API
                 //  写入非坐标行数据（包括标准元数据和汇总数据）
                 foreach (string identifier in orderedNonCoordinateLineIdentifiers)
                 {
+                    
                     string formattedLine = FormatAggregatedSummaryLine(identifier);
                     if (!string.IsNullOrEmpty(formattedLine))
                     {
@@ -770,6 +771,11 @@ namespace CSV_SYSTEM_API
                         // 如果是非坐标行的标识符，但没有对应的聚合或标准元数据，则写入原始空行，
                         // 这种情况通常发生在 ProcessNonCoordinateLine 无法识别并填充的行
                         writer.WriteLine(identifier); // 写入原始标识符，因为它在 orderedNonCoordinateLineIdentifiers 中
+                    }
+
+                    if (identifier.Contains("Total Testing Time")||identifier.Contains("WAFER_ID")) // 使用 Contains 匹配
+                    {
+                        writer.WriteLine(); // 在之后添加空行
                     }
                 }
 
