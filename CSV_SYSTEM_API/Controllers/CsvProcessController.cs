@@ -67,8 +67,8 @@ namespace CSV_SYSTEM_API.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"数据库查询或配置读取发生错误: {ex.Message}");
-                return StatusCode(500, $"处理过程中发生错误: {ex.Message}");
+                _logger.LogError(ex, $"数据库查询或配置读取发生错误: {ex.Message},{ex.StackTrace}");
+                return StatusCode(500, $"处理过程中发生错误: {ex.Message},{ex.StackTrace}");
             }
 
             string folderPath = $@"\\10.20.6.14\testdata\Data\{custid}\{device}\{wflot}";
@@ -134,6 +134,15 @@ namespace CSV_SYSTEM_API.Controllers
             _logger.LogInformation("\n所有合并组处理完毕！");
             string formattedPaths = string.Join("\n", generatedFilePaths); // 使用换行符连接列表中的所有路径
             return Ok($"CSV文件生成完毕，以下是文件路径，请检查：\n{formattedPaths}"); // 修改：返回生成的文件路径列表
+        }
+
+
+
+        // 在 CsvProcessController 或类似的控制器中
+        [HttpGet("test")]
+        public IActionResult Test()
+        {
+            return Ok("这是一个来自后端的 GET 测试响应！");
         }
 
         private (string device, string wflot) GetDeviceAndWFLot(string lotId, string connectionString)
