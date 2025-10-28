@@ -15,7 +15,8 @@ using System.Threading.Tasks;
 namespace CSV_SYSTEM_API.Controllers
 {
     [ApiController]
-    [EnableCors("AllowSpecificOrigin")]
+    // 我将暂时注释掉这一行，以排除控制器级别 CORS 策略的干扰。
+    // [EnableCors("AllowSpecificOrigin")]
     [Route("[controller]")]
     public class CsvProcessController : ControllerBase
     {
@@ -34,26 +35,45 @@ namespace CSV_SYSTEM_API.Controllers
         public async Task<ActionResult<List<string>>> ProcessCsv([FromBody] ProcessRequest request)
         {
             List<string> generatedFilePaths = new List<string>(); // 新增：存储生成的文件路径列表
-            if (string.IsNullOrEmpty(request.LotId))
+            try // 扩展 try 块以覆盖整个方法逻辑
             {
-                _logger.LogWarning("LotId 不能为空。");
-                return BadRequest("LotId 不能为空。");
-            }
+                if (string.IsNullOrEmpty(request.LotId))
+                {
+                    _logger.LogWarning("LotId 不能为空。");
+                    return BadRequest("LotId 不能为空。");
+                }
 
-            _logger.LogInformation($"收到请求，LotId: {request.LotId}");
+                _logger.LogInformation($"收到请求，LotId: {request.LotId}");
 
-            string lotid = request.LotId.Trim();
-            string custid = lotid.Substring(0, 3);
-            string device = string.Empty;
-            string wflot = string.Empty;
-            long expectedGrossDie = 0;
+                string lotid = request.LotId.Trim();
+                string custid = string.Empty;
+                string device = string.Empty;
+                string wflot = string.Empty;
+                long expectedGrossDie = 0;
 
-            try
-            {
+                if (lotid.Length < 3)
+                {
+                    _logger.LogError($"LotId \'{lotid}\' 长度不足3位，无法提取 custid。");
+                    return BadRequest($"LotId \'{lotid}\' 长度不足3位，无法提取 custid。");
+                }
+                custid = lotid.Substring(0, 3);
+
                 string connectionString = _configuration.GetConnectionString("DefaultConnection");
                 (device, wflot) = GetDeviceAndWFLot(lotid, connectionString);
+
+                if (string.IsNullOrEmpty(device) || string.IsNullOrEmpty(wflot))
+                {
+                    _logger.LogError($"LotId \'{lotid}\' 未能从数据库中匹配到设备或WF_LOT信息。");
+                    return NotFound($"LotId \'{lotid}\' 未能从数据库中匹配到设备或WF_LOT信息。");
+                }
+
                 _logger.LogInformation($"查询结果：Device = {device}, WF_LOT = {wflot}");
 
+                if (device.Length < 6)
+                {
+                    _logger.LogError($"Device \'{device}\' 长度不足6位，无法提取 device_ini。");
+                    return BadRequest($"Device \'{device}\' 长度不足6位，无法提取 device_ini。");
+                }
                 string device_ini = device.Substring(0, 6);
                 string grossDieString = _configuration[$"{device_ini}:GrossDie"];
                 if (long.TryParse(grossDieString, out expectedGrossDie))
@@ -64,76 +84,84 @@ namespace CSV_SYSTEM_API.Controllers
                 {
                     _logger.LogWarning($"警告：无法从 devices.ini 读取或解析 {device_ini} 的 GrossDie 值。使用默认值 0。");
                 }
+
+                string folderPath = $@"\\10.20.6.14\testdata\Data\{custid}\{device}\{wflot}";
+                string outputBaseDirectory = $@"\\10.20.6.14\testdata\Data\{custid}\{device}\{wflot}\Final";
+
+                // 连接共享文件夹
+                var sharedFolderConnectResult = SharedFolderHelper.Connect(@"\\10.20.6.14\testdata", @"htsh\daizun", "abc123.");
+                if (!sharedFolderConnectResult.Item1)
+                {
+                    _logger.LogError($"错误：无法连接共享文件夹 \\\\10.20.6.14\\testdata。错误信息: {sharedFolderConnectResult.Item2}");
+                    return StatusCode(500, $"无法连接共享文件夹。请检查网络和凭据。错误信息: {sharedFolderConnectResult.Item2}");
+                }
+
+                if (!Directory.Exists(folderPath))
+                {
+                    _logger.LogError($"错误：指定的文件夹路径 \'{folderPath}\' 不存在。");
+                    return NotFound($"指定的文件夹路径 \'{folderPath}\' 不存在。");
+                }
+
+                CsvDataProcessor fileGrouper = new CsvDataProcessor(_csvDataProcessorLogger, expectedGrossDie);
+                Dictionary<string, List<FileInfo>> groupedFilesToMerge = fileGrouper.GetSortedCsvFiles(folderPath);
+
+                if (groupedFilesToMerge.Count == 0)
+                {
+                    _logger.LogInformation($"指定文件夹 \'{folderPath}\' 中没有找到需要合并的CSV文件组。");
+                    return Ok($"指定文件夹 \'{folderPath}\' 中没有找到需要合并的CSV文件组。");
+                }
+
+                _logger.LogInformation($"找到 {groupedFilesToMerge.Count} 个需要合并的CSV文件组。");
+
+                foreach (var groupEntry in groupedFilesToMerge)
+                {
+                    string mergeKey = groupEntry.Key;
+                    List<FileInfo> csvFilesForGroup = groupEntry.Value;
+
+                    _logger.LogInformation($"\n--- 正在处理合并组: {mergeKey} ---");
+                    _logger.LogInformation("按生成时间排序的CSV文件：");
+                    foreach (var file in csvFilesForGroup)
+                    {
+                        _logger.LogInformation($"- {file.Name} (创建时间: {file.CreationTime})");
+                    }
+
+                    CsvDataProcessor processor = new CsvDataProcessor(_csvDataProcessorLogger, expectedGrossDie);
+
+                    if (!processor.ProcessFilesForMinMaxCoords(csvFilesForGroup))
+                    {
+                        _logger.LogWarning($"合并组 \'{mergeKey}\' 没有找到有效的坐标数据，无法继续处理。");
+                        continue;
+                    }
+
+                    _logger.LogInformation("\n开始处理CSV文件并存储数据...");
+                    processor.ProcessFilesToConsolidateData(csvFilesForGroup);
+
+                    _logger.LogInformation("\n重新计算并聚合汇总数据...");
+                    processor.CalculateAndAggregateSummaryData();
+
+                    string firstFileName = csvFilesForGroup.First().Name;
+                    string outputFileName = firstFileName;
+                    if (!string.IsNullOrEmpty(outputBaseDirectory) && !Directory.Exists(outputBaseDirectory))
+                    {
+                        Directory.CreateDirectory(outputBaseDirectory);
+                    }
+                    string outputFilePath = Path.Combine(outputBaseDirectory, outputFileName);
+                    _logger.LogInformation($"\n正在生成合并后的CSV文件: {outputFilePath}");
+                    processor.GenerateConsolidatedCsvFile(outputFilePath);
+                    generatedFilePaths.Add(outputFilePath); // 新增：将生成的文件路径添加到列表中
+
+                    _logger.LogInformation($"\n处理完成！合并组 \'{mergeKey}\' 已生成包含{processor.ConsolidatedCoordinateDataCount}条唯一坐标数据的CSV文件。");
+                }
+
+                _logger.LogInformation("\n所有合并组处理完毕！");
+                string formattedPaths = string.Join("\n", generatedFilePaths); // 使用换行符连接列表中的所有路径
+                return Ok($"CSV文件生成完毕，以下是文件路径，请检查：\n{formattedPaths}"); // 修改：返回生成的文件路径列表
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"数据库查询或配置读取发生错误: {ex.Message},{ex.StackTrace}");
-                return StatusCode(500, $"处理过程中发生错误: {ex.Message},{ex.StackTrace}");
+                _logger.LogError(ex, $"处理 POST 请求时发生未捕获的错误: {ex.Message}, {ex.StackTrace}");
+                return StatusCode(500, $"处理 POST 请求时发生内部服务器错误: {ex.Message}");
             }
-
-            string folderPath = $@"\\10.20.6.14\testdata\Data\{custid}\{device}\{wflot}";
-            string outputBaseDirectory = $@"\\10.20.6.14\testdata\Data\{custid}\{device}\{wflot}\Final";
-
-            if (!Directory.Exists(folderPath))
-            {
-                _logger.LogError($"错误：指定的文件夹路径 '{folderPath}' 不存在。");
-                return NotFound($"指定的文件夹路径 '{folderPath}' 不存在。");
-            }
-
-            CsvDataProcessor fileGrouper = new CsvDataProcessor(_csvDataProcessorLogger, expectedGrossDie);
-            Dictionary<string, List<FileInfo>> groupedFilesToMerge = fileGrouper.GetSortedCsvFiles(folderPath);
-
-            if (groupedFilesToMerge.Count == 0)
-            {
-                _logger.LogInformation($"指定文件夹 '{folderPath}' 中没有找到需要合并的CSV文件组。");
-                return Ok($"指定文件夹 '{folderPath}' 中没有找到需要合并的CSV文件组。");
-            }
-
-            _logger.LogInformation($"找到 {groupedFilesToMerge.Count} 个需要合并的CSV文件组。");
-
-            foreach (var groupEntry in groupedFilesToMerge)
-            {
-                string mergeKey = groupEntry.Key;
-                List<FileInfo> csvFilesForGroup = groupEntry.Value;
-
-                _logger.LogInformation($"\n--- 正在处理合并组: {mergeKey} ---");
-                _logger.LogInformation("按生成时间排序的CSV文件：");
-                foreach (var file in csvFilesForGroup)
-                {
-                    _logger.LogInformation($"- {file.Name} (创建时间: {file.CreationTime})");
-                }
-
-                CsvDataProcessor processor = new CsvDataProcessor(_csvDataProcessorLogger, expectedGrossDie);
-
-                if (!processor.ProcessFilesForMinMaxCoords(csvFilesForGroup))
-                {
-                    _logger.LogWarning($"合并组 '{mergeKey}' 没有找到有效的坐标数据，无法继续处理。");
-                    continue;
-                }
-
-                _logger.LogInformation("\n开始处理CSV文件并存储数据...");
-                processor.ProcessFilesToConsolidateData(csvFilesForGroup);
-
-                _logger.LogInformation("\n重新计算并聚合汇总数据...");
-                processor.CalculateAndAggregateSummaryData();
-
-                string firstFileName = csvFilesForGroup.First().Name;
-                string outputFileName = firstFileName;
-                if (!string.IsNullOrEmpty(outputBaseDirectory) && !Directory.Exists(outputBaseDirectory))
-                {
-                    Directory.CreateDirectory(outputBaseDirectory);
-                }
-                string outputFilePath = Path.Combine(outputBaseDirectory, outputFileName);
-                _logger.LogInformation($"\n正在生成合并后的CSV文件: {outputFilePath}");
-                processor.GenerateConsolidatedCsvFile(outputFilePath);
-                generatedFilePaths.Add(outputFilePath); // 新增：将生成的文件路径添加到列表中
-
-                _logger.LogInformation($"\n处理完成！合并组 '{mergeKey}' 已生成包含{processor.ConsolidatedCoordinateDataCount}条唯一坐标数据的CSV文件。");
-            }
-
-            _logger.LogInformation("\n所有合并组处理完毕！");
-            string formattedPaths = string.Join("\n", generatedFilePaths); // 使用换行符连接列表中的所有路径
-            return Ok($"CSV文件生成完毕，以下是文件路径，请检查：\n{formattedPaths}"); // 修改：返回生成的文件路径列表
         }
 
 
