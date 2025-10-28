@@ -733,9 +733,9 @@ namespace CSV_SYSTEM_API
             {
                 if (totalCount != _expectedGrossDie)
                 {
-                    _logger.LogWarning($"警告：汇总数据的 Total 值 ({totalCount}) 与 devices.ini 中的预期 GrossDie ({_expectedGrossDie}) 不符！");
-                    // Environment.Exit(1); // Remove this, as we don't want to exit the entire web application
-                    // You might want to throw an exception or return an error status here in a real API
+                    var message = $"汇总数据的 Total 值 ({totalCount}) 与 devices.ini 中的预期 GrossDie ({_expectedGrossDie}) 不符！";
+                    _logger.LogWarning("警告：" + message);
+                    throw new InvalidOperationException(message);
                 }
                 else
                 {
