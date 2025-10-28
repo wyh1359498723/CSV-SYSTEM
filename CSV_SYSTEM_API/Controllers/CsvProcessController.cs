@@ -12,6 +12,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Text.RegularExpressions; 
+using System.IO.Compression;
 
 namespace CSV_SYSTEM_API.Controllers
 {
@@ -149,7 +150,7 @@ namespace CSV_SYSTEM_API.Controllers
                     // 根据 custid 决定文件名格式
                     if (custid == "SWL")
                     {
-                        string newFileName = $"IO#{fileNameDetails["tp_name"]}#{fileNameDetails["tester_id"]}#{fileNameDetails["probecard_id"]}#CP-0000#OI{fileNameDetails["customer_wafer_id"]}_ALL_{fileNameDetails["utc_enddate_code_date"]}_{fileNameDetails["utc_enddate_code_time"]}.csv";
+                        string newFileName = $"IO#{fileNameDetails["tp_name"]}#{fileNameDetails["tester_id"]}#{fileNameDetails["probecard_id"]}#CP-0000#OI{fileNameDetails["customer_wafer_id"]}_ALL_{fileNameDetails["utc_enddate_code_date"]}{fileNameDetails["utc_enddate_code_time"]}.csv";
                         outputFileName = newFileName;
                         _logger.LogInformation($"Custid 匹配 SWL，使用新文件名: {outputFileName}");
                     }
@@ -182,7 +183,75 @@ namespace CSV_SYSTEM_API.Controllers
             }
         }
 
+        /// <summary>
+        /// 压缩指定目录下的所有CSV文件为一个ZIP文件。
+        /// ZIP文件命名规则：IO#<TP Name>I<TESTER ID>H<PROBECARD ID>#OIcuStomer LOT ID>-<WAFER ID> ALL.CSV <UTC ENDDATECODE>.Zip
+        /// </summary>
+        /// <param name="outputBaseDirectory">包含CSV文件的目录路径。</param>
+        /// <returns>操作结果。</returns>
+        [HttpPost("ZipCsvFiles")]
+        public async Task<IActionResult> ZipCsvFiles([FromQuery] string outputBaseDirectory)
+        {
+            if (string.IsNullOrEmpty(outputBaseDirectory) || !Directory.Exists(outputBaseDirectory))
+            {
+                return BadRequest("无效的输出目录。");
+            }
 
+            try
+            {
+                var csvFiles = new DirectoryInfo(outputBaseDirectory).GetFiles("*.csv").ToList();
+                if (!csvFiles.Any())
+                {
+                    return Ok($"目录 \'{outputBaseDirectory}\' 中没有找到CSV文件，无需压缩。");
+                }
+
+                // 从第一个CSV文件提取命名ZIP所需的详细信息
+                var firstFileName = csvFiles.First().Name;
+
+                // 构造 ZIP 文件名，直接从已修改的CSV文件名中提取
+                // 例如：IO#ONXQ000#CP#TA31#CP-0000#OI5029C54-14_ALL_20250310_4091434.csv
+                // 目标ZIP文件名：IO#ONXQ000#CP#TA31#CP-0000#OI5029C54-14_ALL.csv_20250310_4091434.zip
+                string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(firstFileName);
+                string[] parts = fileNameWithoutExtension.Split(new[] { '_' }, StringSplitOptions.RemoveEmptyEntries);
+
+                string baseFileNamePrefix = "UNKNOWN";
+                string timePart = "UNKNOWN";
+
+                if (parts.Length >= 3)
+                {
+                    
+                    timePart = parts[parts.Length - 1];
+                    // 基础文件名部分是除了日期和时间之外的所有部分
+                    baseFileNamePrefix = string.Join("_", parts.Take(parts.Length - 1));
+                } 
+
+                string zipFileName = $"{baseFileNamePrefix}.csv_{timePart}.zip";
+                string zipFilePath = Path.Combine(outputBaseDirectory, zipFileName);
+
+                // 检查目标ZIP文件是否已存在，如果存在则删除
+                if (System.IO.File.Exists(zipFilePath))
+                {
+                    System.IO.File.Delete(zipFilePath);
+                }
+
+                // 创建ZIP文件
+                using (var zipArchive = ZipFile.Open(zipFilePath, ZipArchiveMode.Create))
+                {
+                    foreach (var file in csvFiles)
+                    {
+                        zipArchive.CreateEntryFromFile(file.FullName, file.Name, CompressionLevel.Fastest);
+                    }
+                }
+
+                _logger.LogInformation($"成功将 {csvFiles.Count} 个CSV文件压缩到: {zipFilePath}");
+                return Ok($"成功压缩CSV文件到: {zipFilePath}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"压缩CSV文件时发生错误: {ex.Message}, {ex.StackTrace}");
+                return StatusCode(500, $"压缩CSV文件时发生内部服务器错误: {ex.Message}");
+            }
+        }
 
         // 在 CsvProcessController 或类似的控制器中
         [HttpGet("test")]
@@ -261,7 +330,7 @@ namespace CSV_SYSTEM_API.Controllers
                 string fullTimestamp = parts[12];
                 if (fullTimestamp.Length >= 8)
                 {
-                    details["utc_enddate_code_time"] = fullTimestamp.Substring(7);
+                    details["utc_enddate_code_time"] = fullTimestamp.Substring(7); // 从第8个字符开始（索引7）
                 } else {
                     details["utc_enddate_code_time"] = "UNKNOWN";
                 }
