@@ -16,7 +16,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowSpecificOrigin",
         builder =>
         {
-            builder.WithOrigins("http://10.20.80.54:8848")
+            builder.WithOrigins("http://localhost:8848", "http://10.20.80.54:8848", "http://10.20.5.21:8081")
                    .AllowAnyHeader()
                    .AllowAnyMethod();
         });
@@ -38,7 +38,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection();
+
+app.UseRouting(); // 添加 UseRouting
 
 app.UseCors("AllowSpecificOrigin");
 
