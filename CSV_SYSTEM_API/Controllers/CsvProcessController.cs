@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Text.RegularExpressions; 
 
 namespace CSV_SYSTEM_API.Controllers
 {
@@ -141,6 +142,23 @@ namespace CSV_SYSTEM_API.Controllers
 
                     string firstFileName = csvFilesForGroup.First().Name;
                     string outputFileName = firstFileName;
+
+                    // 提取文件名详细信息
+                    var fileNameDetails = ExtractFileNameDetails(firstFileName);
+
+                    // 根据 custid 决定文件名格式
+                    if (custid == "SWL")
+                    {
+                        string newFileName = $"IO#{fileNameDetails["tp_name"]}#{fileNameDetails["tester_id"]}#{fileNameDetails["probecard_id"]}#CP-0000#OI{fileNameDetails["customer_wafer_id"]}_ALL_{fileNameDetails["utc_enddate_code_date"]}_{fileNameDetails["utc_enddate_code_time"]}.csv";
+                        outputFileName = newFileName;
+                        _logger.LogInformation($"Custid 匹配 SWL，使用新文件名: {outputFileName}");
+                    }
+                    else
+                    {
+                         _logger.LogInformation($"Custid 不匹配 SWL，使用原始文件名: {firstFileName}");
+                        outputFileName = firstFileName;
+                    }
+
                     if (!string.IsNullOrEmpty(outputBaseDirectory) && !Directory.Exists(outputBaseDirectory))
                     {
                         Directory.CreateDirectory(outputBaseDirectory);
@@ -192,6 +210,72 @@ namespace CSV_SYSTEM_API.Controllers
                 }
             }
             return (device, wflot);
+        }
+
+        /// <summary>
+        /// 从原始CSV文件名中提取详细信息，根据下划线拆分并依照次序选择。
+        /// 例如：KWIC414PR1__4292730__4292730-02_CP1_RP0_TA30_PU144_ONXQ000_CP_HT_PR1_20250207_20250225145307.csv
+        /// </summary>
+        /// <param name="fileName">原始文件名。</param>
+        /// <returns>包含提取信息的字典。</returns>
+        private Dictionary<string, string> ExtractFileNameDetails(string fileName)
+        {
+            var details = new Dictionary<string, string>();
+            string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(fileName);
+            string[] parts = fileNameWithoutExtension.Split(new[] { '_' }, StringSplitOptions.RemoveEmptyEntries);
+
+            // 根据示例文件名 `KWIC414PR1__4292730__4292730-02_CP1_RP0_TA30_PU144_ONXQ000_CP_HT_PR1_20250207_20250225145307.csv`
+            // 拆分后的索引（假设 StringSplitOptions.RemoveEmptyEntries 移除空字符串）：
+            // [0] = KWIC414PR1
+            // [1] = 4292730
+            // [2] = 4292730-02
+            // [3] = CP1
+            // [4] = RP0
+            // [5] = TA30
+            // [6] = PU144
+            // [7] = ONXQ000
+            // [8] = CP
+            // [9] = HT
+            // [10] = PR1
+            // [11] = 20250207 (日期部分)
+            // [12] = 20250225145307 (完整时间戳)
+
+            // 确保数组有足够的长度以避免索引越界
+            if (parts.Length > 12)
+            {
+                // <TP Name> (ONXQ000)
+                details["tp_name"] = parts[7];
+
+                // <TESTER ID> (CP) - 原始文件名中可能是 CP1, CP2 等，但目标是 CP
+                details["tester_id"] = parts[8].StartsWith("CP", StringComparison.OrdinalIgnoreCase) ? "CP" : "UNKNOWN";
+
+                // <PROBECARD ID> (TA30)
+                details["probecard_id"] = parts[5];
+
+                // <cuStomer LOT ID>-<WAFER ID> (4292730-02)
+                details["customer_wafer_id"] = parts[2];
+
+                // <UTC ENDDATECODE> (日期和时间)
+                details["utc_enddate_code_date"] = parts[11];
+                // 从最后一个部分 (parts[12]) 提取时间部分 (后6位)
+                string fullTimestamp = parts[12];
+                if (fullTimestamp.Length >= 8)
+                {
+                    details["utc_enddate_code_time"] = fullTimestamp.Substring(7);
+                } else {
+                    details["utc_enddate_code_time"] = "UNKNOWN";
+                }
+            } else {
+                // 如果文件名的部分不足，则所有字段都设置为 UNKNOWN
+                details["tp_name"] = "UNKNOWN";
+                details["tester_id"] = "UNKNOWN";
+                details["probecard_id"] = "UNKNOWN";
+                details["customer_wafer_id"] = "UNKNOWN";
+                details["utc_enddate_code_date"] = "UNKNOWN";
+                details["utc_enddate_code_time"] = "UNKNOWN";
+            }
+
+            return details;
         }
     }
 
