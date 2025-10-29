@@ -253,6 +253,75 @@ namespace CSV_SYSTEM_API.Controllers
             }
         }
 
+        /// <summary>
+        /// 压缩指定目录下的所有 .STD 或 .stdf 文件为一个 .gz 压缩文件。
+        /// 压缩文件命名规则：TA31_CP1_KWIC414PR3_ONXQ000_CP_HT_PR2_20250310_5029C54_5029C54_5029C54-14_R0_20250724_091434.STD.gz
+        /// 其中 R0 代表的是 RP0。变量命名：TA31->testerId，CP1->modeCode，KWIC414PR3->deviceName
+        /// </summary>
+        /// <param name="folderPath">包含 .STD 或 .stdf 文件的目录路径。</param>
+        /// <returns>操作结果。</returns>
+        [HttpPost("GZipStdFiles")]
+        public async Task<IActionResult> GZipStdFiles([FromQuery] string folderPath)
+        {
+            if (string.IsNullOrEmpty(folderPath) || !Directory.Exists(folderPath))
+            {
+                return BadRequest("无效的输出目录。");
+            }
+
+            try
+            {
+                var stdFiles = new DirectoryInfo(folderPath).GetFiles("*.STD", SearchOption.AllDirectories)
+                                        .Concat(new DirectoryInfo(folderPath).GetFiles("*.stdf", SearchOption.AllDirectories))
+                                        .ToList();
+                if (!stdFiles.Any())
+                {
+                    return Ok($"目录 '{folderPath}' 中没有找到 .STD 或 .stdf 文件，无需压缩。");
+                }
+
+                List<string> zippedFilePaths = new List<string>();
+
+                string finalOutputDirectory = Path.Combine(folderPath, "Final");
+                if (!Directory.Exists(finalOutputDirectory))
+                {
+                    Directory.CreateDirectory(finalOutputDirectory);
+                }
+
+                foreach (var file in stdFiles)
+                {
+                    // 提取文件名详细信息
+                    var fileNameDetails = ExtractStdFileNameDetails(file.Name);
+
+                    // 格式化 gz 文件名
+                    string gzFileName = FormatStdGzFileName(fileNameDetails);
+                    string gzFilePath = Path.Combine(finalOutputDirectory, gzFileName);
+
+                    // 检查目标 .gz 文件是否已存在，如果存在则删除
+                    if (System.IO.File.Exists(gzFilePath))
+                    {
+                        System.IO.File.Delete(gzFilePath);
+                    }
+
+                    // 执行 GZip 压缩
+                    using (FileStream originalFileStream = file.OpenRead())
+                    using (FileStream compressedFileStream = System.IO.File.Create(gzFilePath))
+                    using (GZipStream gzipStream = new GZipStream(compressedFileStream, CompressionMode.Compress))
+                    {
+                        await originalFileStream.CopyToAsync(gzipStream);
+                    }
+                    zippedFilePaths.Add(gzFilePath);
+                    _logger.LogInformation($"成功将文件 '{file.Name}' 压缩到: '{gzFilePath}'");
+                }
+                
+                string formattedPaths = string.Join("\n", zippedFilePaths);
+                return Ok($"成功压缩 .STD/.stdf 文件到: \n{formattedPaths}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"压缩 .STD/.stdf 文件时发生错误: {ex.Message}, {ex.StackTrace}");
+                return StatusCode(500, $"压缩 .STD/.stdf 文件时发生内部服务器错误: {ex.Message}");
+            }
+        }
+
         // 在 CsvProcessController 或类似的控制器中
         [HttpGet("test")]
         public IActionResult Test()
@@ -345,6 +414,105 @@ namespace CSV_SYSTEM_API.Controllers
             }
 
             return details;
+        }
+
+        /// <summary>
+        /// 从 .STD 或 .stdf 文件名中提取详细信息。
+        /// 示例文件名: KWIC414PR3_5029C54_5029C54-14_CP1_RP0_TA31_PU88_ONXQ000_CP_HT_PR2_20250310_20250724091434.STD
+        /// </summary>
+        private Dictionary<string, string> ExtractStdFileNameDetails(string fileName)
+        {
+            var details = new Dictionary<string, string>();
+            string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(fileName);
+            string[] parts = fileNameWithoutExtension.Split(new[] { '_' }, StringSplitOptions.RemoveEmptyEntries);
+            string originalExtension = Path.GetExtension(fileName); // 重新获取原始扩展名
+
+            details["originalExtension"] = originalExtension; // 存储原始扩展名，不转换为小写
+
+            // 示例文件名解析:
+            // [0] = KWIC414PR3 (deviceName)
+            // [1] = 5029C54
+            // [2] = 5029C54-14
+            // [3] = CP1 (modeCode)
+            // [4] = RP0 (R0)
+            // [5] = TA31 (testerId)
+            // [6] = PU88
+            // [7] = ONXQ000
+            // [8] = CP
+            // [9] = HT
+            // [10] = PR2
+            // [11] = 20250310 (日期部分)
+            // [12] = 20250724091434 (时间戳)
+
+            if (parts.Length > 12)
+            {
+                details["deviceName"] = parts[0]; // KWIC414PR3
+                details["LotNo"] = parts[1]; // 5029C54
+                details["waferId"] = parts[2]; // 5029C54-14
+                details["modeCode"] = parts[3];   // CP1
+                details["rpValue"] = parts[4];    // RP0
+                details["testerId"] = parts[5];   // TA31
+                // details["programPart"] = parts[7]; // ONXQ000 -- 旧的，将被 programName 替换
+                // details["datePart"] = parts[11]; // 20250310 -- 旧的，将被 programName 包含
+
+                // programName: ONXQ000_CP_HT_PR2_20250310
+                details["programName"] = string.Join("_", parts.Skip(7).Take(5));
+                
+                // 从完整时间戳中提取日期和时间
+                string fullTimestamp = parts[12]; // 20250724091434
+                if (fullTimestamp.Length >= 8) // 至少包含 YYYYMMDD
+                {
+                    details["endDateTime"] = fullTimestamp; // 完整时间戳
+                    details["endDate"] = fullTimestamp.Substring(0, 8); // 20250724
+                    details["endTime"] = fullTimestamp.Substring(8, 6); // 091434
+                } else {
+                    details["endDateTime"] = "UNKNOWN";
+                    details["endDate"] = "UNKNOWN";
+                    details["endTime"] = "UNKNOWN";
+                }
+            }
+            else
+            {
+                // 如果文件名的部分不足，则所有字段都设置为 UNKNOWN
+                details["deviceName"] = "UNKNOWN";
+                details["LotNo"] = "UNKNOWN";
+                details["waferId"] = "UNKNOWN";
+                details["modeCode"] = "UNKNOWN";
+                details["rpValue"] = "UNKNOWN";
+                details["testerId"] = "UNKNOWN";
+                details["programName"] = "UNKNOWN";
+                details["endDateTime"] = "UNKNOWN";
+                details["endDate"] = "UNKNOWN";
+                details["endTime"] = "UNKNOWN";
+                details["originalExtension"] = originalExtension; // 确保在错误情况下也设置
+            }
+            return details;
+        }
+
+        /// <summary>
+        /// 根据提取的详细信息格式化 .gz 文件名。
+        /// 目标格式：TA31_CP1_KWIC414PR3_ONXQ000_CP_HT_PR2_20250310_5029C54_5029C54_5029C54-14_R0_20250724_091434.STD.gz
+        /// </summary>
+        private string FormatStdGzFileName(Dictionary<string, string> details)
+        {
+            string testerId = details.GetValueOrDefault("testerId", "UNKNOWN"); // TA31
+            string modeCode = details.GetValueOrDefault("modeCode", "UNKNOWN"); // CP1
+            string deviceName = details.GetValueOrDefault("deviceName", "UNKNOWN"); // KWIC414PR3
+            string programName = details.GetValueOrDefault("programName", "UNKNOWN"); // ONXQ000_CP_HT_PR2_20250310
+            string LotNo = details.GetValueOrDefault("LotNo", "UNKNOWN"); // 5029C54
+            string waferId = details.GetValueOrDefault("waferId", "UNKNOWN"); // 5029C54-14
+            string endDate = details.GetValueOrDefault("endDate", "UNKNOWN"); // 20250724
+            string endTime = details.GetValueOrDefault("endTime", "UNKNOWN"); // 091434
+            string originalExtension = details.GetValueOrDefault("originalExtension", ".STD"); // 获取原始扩展名
+
+            // RP0 -> R0
+            string rpValueFormatted = details.GetValueOrDefault("rpValue", "UNKNOWN").Replace("RP", "R");
+
+            // 构造新的文件名
+            // 示例: TA31_CP1_KWIC414PR3_ONXQ000_CP_HT_PR2_20250310_5029C54_5029C54_5029C54-14_R0_20250724_091434.STD.gz
+            string formattedFileName = $"{testerId}_{modeCode}_{deviceName}_{programName}_{LotNo}_{LotNo}_{waferId}_{rpValueFormatted}_{endDate}_{endTime}{originalExtension}.gz";
+
+            return formattedFileName;
         }
     }
 
