@@ -205,46 +205,56 @@ namespace CSV_SYSTEM_API.Controllers
                     return Ok($"目录 \'{outputBaseDirectory}\' 中没有找到CSV文件，无需压缩。");
                 }
 
-                // 从第一个CSV文件提取命名ZIP所需的详细信息
-                var firstFileName = csvFiles.First().Name;
+                List<string> zippedFilePaths = new List<string>();
 
-                // 构造 ZIP 文件名，直接从已修改的CSV文件名中提取
-                // 例如：IO#ONXQ000#CP#TA31#CP-0000#OI5029C54-14_ALL_20250310_4091434.csv
-                // 目标ZIP文件名：IO#ONXQ000#CP#TA31#CP-0000#OI5029C54-14_ALL.csv_20250310_4091434.zip
-                string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(firstFileName);
-                string[] parts = fileNameWithoutExtension.Split(new[] { '_' }, StringSplitOptions.RemoveEmptyEntries);
-
-                string baseFileNamePrefix = "UNKNOWN";
-                string timePart = "UNKNOWN";
-
-                if (parts.Length >= 3)
+                foreach (var csvFile in csvFiles)
                 {
-                    
-                    timePart = parts[parts.Length - 1];
-                    // 基础文件名部分是除了日期和时间之外的所有部分
-                    baseFileNamePrefix = string.Join("_", parts.Take(parts.Length - 1));
-                } 
+                    string originalFileName = csvFile.Name;
+                    string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(originalFileName);
+                    string basePart = "";
+                    string timePart = "";
 
-                string zipFileName = $"{baseFileNamePrefix}.csv_{timePart}.zip";
-                string zipFilePath = Path.Combine(outputBaseDirectory, zipFileName);
-
-                // 检查目标ZIP文件是否已存在，如果存在则删除
-                if (System.IO.File.Exists(zipFilePath))
-                {
-                    System.IO.File.Delete(zipFilePath);
-                }
-
-                // 创建ZIP文件
-                using (var zipArchive = ZipFile.Open(zipFilePath, ZipArchiveMode.Create))
-                {
-                    foreach (var file in csvFiles)
+                    int allIndex = fileNameWithoutExtension.LastIndexOf("_ALL");
+                    if (allIndex != -1)
                     {
-                        zipArchive.CreateEntryFromFile(file.FullName, file.Name, CompressionLevel.Fastest);
+                        basePart = fileNameWithoutExtension.Substring(0, allIndex + "_ALL".Length); // 例如: "IO#..._ALL"
+                        string remaining = fileNameWithoutExtension.Substring(allIndex + "_ALL".Length); // 例如: "_20250310_4091434"
+                        if (remaining.StartsWith("_"))
+                        {
+                            timePart = remaining.Substring(1); // 移除开头的下划线: "20250310_4091434"
+                        } else {
+                            timePart = remaining;
+                        }
                     }
+                    else
+                    {
+                        // 如果文件名中没有找到 "_ALL"，则作为回退处理
+                        basePart = fileNameWithoutExtension;
+                        timePart = "";
+                    }
+
+                    // 构造新的 ZIP 文件名: "basePart.csv_timePart.zip"
+                    string zipFileName = $"{basePart}.csv_{timePart}.zip";
+
+                    string zipFilePath = Path.Combine(outputBaseDirectory, zipFileName);
+
+                    // 检查目标ZIP文件是否已存在，如果存在则删除
+                    if (System.IO.File.Exists(zipFilePath))
+                    {
+                        System.IO.File.Delete(zipFilePath);
+                    }
+
+                    using (var zipArchive = ZipFile.Open(zipFilePath, ZipArchiveMode.Create))
+                    {
+                        zipArchive.CreateEntryFromFile(csvFile.FullName, csvFile.Name, CompressionLevel.Fastest);
+                    }
+                    zippedFilePaths.Add(zipFilePath);
+                    _logger.LogInformation($"成功将文件 '{csvFile.Name}' 压缩到: '{zipFilePath}'");
                 }
 
-                _logger.LogInformation($"成功将 {csvFiles.Count} 个CSV文件压缩到: {zipFilePath}");
-                return Ok($"成功压缩CSV文件到: {zipFilePath}");
+                string formattedPaths = string.Join("\n", zippedFilePaths);
+                _logger.LogInformation($"成功将 {csvFiles.Count} 个CSV文件压缩到单独的ZIP文件: \n{formattedPaths}");
+                return Ok($"成功压缩CSV文件到: \n{formattedPaths}");
             }
             catch (Exception ex)
             {
