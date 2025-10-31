@@ -91,7 +91,24 @@ namespace CSV_SYSTEM_API.Controllers
                 string outputBaseDirectory = $@"\\10.20.6.14\testdata\Data\{custid}\{device}\{wflot}\Final";
 
                 // 连接共享文件夹
-                var sharedFolderConnectResult = SharedFolderHelper.Connect(@"\\10.20.6.14\testdata", @"htsh\daizun", "abc123.");
+                var folderPassword = _configuration.GetConnectionString("sharedFolderConnectPassword");
+                var sharedFolderConnectResult = SharedFolderHelper.Connect(@"\\10.20.6.14\testdata", @"htsh\daizun", $"{folderPassword}");
+                try
+                {
+                    // 检查目录是否存在，如果不存在则创建（包括所有必要的父目录）
+                    if (!Directory.Exists(outputBaseDirectory))
+                    {
+                        Directory.CreateDirectory(outputBaseDirectory);
+
+                    }
+
+                }
+                catch (Exception ex)
+                {
+                    // 捕获可能的异常，比如网络路径不可访问、权限不足等
+                    _logger.LogError($"创建目录时出错: {ex.Message}");
+                    return StatusCode(500, $"无法连接共享文件夹。请检查网络和凭据。错误信息: {ex.Message}");
+                }
                 if (!sharedFolderConnectResult.Item1)
                 {
                     _logger.LogError($"错误：无法连接共享文件夹 \\\\10.20.6.14\\testdata。错误信息: {sharedFolderConnectResult.Item2}");
