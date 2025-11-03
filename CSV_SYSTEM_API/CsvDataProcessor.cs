@@ -367,7 +367,7 @@ namespace CSV_SYSTEM_API
                                     double percentage = (totalCount > 0) ? ((double)sbinData.Count / totalCount * 100) : 0.0;
 
                                     return string.Format(
-                                            "SBin[{0,-2}]  {1,-28}  {2,8}  {3,7:F2}%  {4,3}",
+                                            "SBin[{0}]  {1,-28}  {2,8}  {3,7:F2}%  {4,3}",
                                             sbinId,
                                             sbinData.Description,
                                             sbinData.Count,
