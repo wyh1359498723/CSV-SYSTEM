@@ -1,5 +1,6 @@
 using System.IO;
 using System;
+using Microsoft.AspNetCore.Http;
 
 namespace CSV_SYSTEM_API.Model
 {
@@ -32,5 +33,10 @@ namespace CSV_SYSTEM_API.Model
             Description = description;
             SiteId = siteId;
         }
+    }
+
+    public class FileUploadRequest
+    {
+        public IFormFile File { get; set; }
     }
 }

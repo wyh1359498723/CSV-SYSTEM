@@ -1,5 +1,5 @@
 using CSV_SYSTEM_API; 
-using CSV_SYSTEM_API.Model; // Add this using statement
+using CSV_SYSTEM_API.Model; 
 using Dapper;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
@@ -13,12 +13,15 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Text.RegularExpressions; 
 using System.IO.Compression;
+using System.Web; 
+using Microsoft.Extensions.Configuration.Ini;
+using System.Net; 
+using System.Text; 
 
 namespace CSV_SYSTEM_API.Controllers
 {
     [ApiController]
-    // 我将暂时注释掉这一行，以排除控制器级别 CORS 策略的干扰。
-    // [EnableCors("AllowSpecificOrigin")]
+    
     [Route("[controller]")]
     public class CsvProcessController : ControllerBase
     {
@@ -346,6 +349,65 @@ namespace CSV_SYSTEM_API.Controllers
             {
                 _logger.LogError(ex, $"压缩 .STD/.stdf 文件时发生错误: {ex.Message}, {ex.StackTrace}");
                 return StatusCode(500, $"压缩 .STD/.stdf 文件时发生内部服务器错误: {ex.Message}");
+            }
+        }
+
+        [HttpPost("CsvToMap")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> CsvToMap([FromForm] FileUploadRequest request)
+        {
+            if (request == null || request.File == null || request.File.Length == 0)
+            {
+                _logger.LogError("未上传文件或文件为空。");
+                return BadRequest("未上传文件或文件为空。");
+            }
+
+            IFormFile file = request.File;
+            string tempFilePath = Path.GetTempFileName();
+            string outputFileName = ""; 
+            try
+            {
+                // 将上传的文件保存到临时路径
+                using (var stream = new FileStream(tempFilePath, FileMode.Create))
+                {
+                    await file.CopyToAsync(stream);
+                }
+
+                // 确保 setup.ini 文件存在且可读
+                string iniFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "setup.ini");
+                if (!System.IO.File.Exists(iniFilePath))
+                {
+                    _logger.LogError($"setup.ini 文件未找到: {iniFilePath}");
+                    return StatusCode(500, "服务器配置错误：setup.ini 文件缺失。");
+                }
+
+                CsvToMapConverter converter = new CsvToMapConverter(_logger, iniFilePath, _configuration);
+                var (mapFileContent, generatedFileName) = converter.ConvertCsvToMap(tempFilePath, file.FileName);
+                outputFileName = generatedFileName;
+
+                if (mapFileContent == null || mapFileContent.Length == 0)
+                {
+                    return StatusCode(500, "MAP文件生成失败或内容为空。");
+                }
+
+                // 设置响应头
+                string contentDispositionHeader = $"attachment; filename={Uri.EscapeDataString(outputFileName)}";
+                Response.Headers.Add("Content-Disposition", contentDispositionHeader);
+                _logger.LogInformation($"发送的 Content-Disposition 响应头: {contentDispositionHeader}");
+                return File(mapFileContent, "application/octet-stream");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"处理 CSV 到 MAP 转换时发生错误: {ex.Message}");
+                return StatusCode(500, $"处理文件时发生内部服务器错误: {ex.Message}");
+            }
+            finally
+            {
+                // 清理临时文件
+                if (System.IO.File.Exists(tempFilePath))
+                {
+                    System.IO.File.Delete(tempFilePath);
+                }
             }
         }
 

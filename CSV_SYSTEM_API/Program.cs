@@ -18,7 +18,8 @@ builder.Services.AddCors(options =>
         {
             builder.WithOrigins("http://localhost:8848", "http://10.20.80.54:8848", "http://10.20.5.21:8081")
                    .AllowAnyHeader()
-                   .AllowAnyMethod();
+                   .AllowAnyMethod()
+                   .WithExposedHeaders("Content-Disposition"); // 暴露 Content-Disposition 头部
         });
 });
 
