@@ -34,6 +34,8 @@ namespace CSV_SYSTEM_API
         private DateTime? latestEndingTime;
         private List<TimeSpan> allTotalTestingTimes;
         private long _expectedGrossDie;
+        private string cpValue;
+        private string deviceName;
 
         public int ConsolidatedCoordinateDataCount => consolidatedCoordinateData.Count;
 
@@ -285,8 +287,42 @@ namespace CSV_SYSTEM_API
             }
             else
             {
+
                 // 对于标准元数据，直接覆盖
-                standardMetadata[identifier] = line;
+                //standardMetadata[identifier] = line;
+                //XWB特殊处理
+                //if (identifier.StartsWith("Date")
+                //    || identifier.StartsWith("Tester ID") || identifier.StartsWith("User")
+                //    || identifier.StartsWith("Program") || identifier.StartsWith("Handler") || identifier.StartsWith("Site"))
+                    //{
+                    standardMetadata[identifier] = line;
+                //}
+                if (identifier.StartsWith("WAFER_ID"))
+                {
+                    string[] part1=line.Split(':', 2);
+                    string[] part2=part1[1].Trim().Split('-');
+                    standardMetadata["Wafer Id"] = $"Wafer Id:{part2[1].Trim()}" ;
+                    standardMetadata["Lot Id"] = $"Lot Id:{part2[0].Trim()}";
+                    standardMetadata["SBLOT Id"]=$"SBLOT Id:{part2[1].Trim()}";
+                }
+
+                if(identifier== "cp_setup_filename")
+                {
+                    string[] parts=line.Split(':', 2);
+                    if(parts.Length==2)
+                    {
+                        cpValue= parts[1].Trim();
+                    }
+                }
+
+                if(identifier== "Device_filename")
+                {
+                    string[] parts=line.Split(':', 2);
+                    if(parts.Length==2)
+                    {
+                        deviceName= parts[1].Trim();
+                    }
+                }
             }
         }
 
@@ -668,7 +704,29 @@ namespace CSV_SYSTEM_API
                                 // 确保标识符只添加一次
                                 if (!orderedNonCoordinateLineIdentifiers.Contains(identifier))
                                 {
-                                    orderedNonCoordinateLineIdentifiers.Add(identifier);
+                                    if (identifier.StartsWith("STS8200 StationA") ||identifier.StartsWith("Date")
+                                        || identifier.StartsWith("Tester ID") || identifier.StartsWith("User")
+                                        || identifier==("Program") || identifier.StartsWith("Handler") 
+                                        || identifier.StartsWith("Site")||identifier.StartsWith("Average Test Time")
+                                        || identifier.StartsWith("Idle Time")||identifier.StartsWith("Beginning Time")
+                                        || identifier.StartsWith("Ending Time")||identifier.StartsWith("Total Testing Time")
+                                        || identifier.StartsWith("Total")||identifier.StartsWith("Pass")
+                                        ||identifier.StartsWith("Fail")||identifier.StartsWith("SBin["))
+                                        orderedNonCoordinateLineIdentifiers.Add(identifier);
+                                }
+
+                                if (identifier.StartsWith("WAFER_ID"))
+                                {
+                                    
+                                    // 添加新的独立标识符
+                                    string[] newIdentifiers = { "Wafer Id", "Lot Id", "SBLOT Id" };
+                                    foreach (var newId in newIdentifiers)
+                                    {
+                                        if (!orderedNonCoordinateLineIdentifiers.Contains(newId))
+                                        {
+                                            orderedNonCoordinateLineIdentifiers.Add(newId);
+                                        }
+                                    }
                                 }
                                 ProcessNonCoordinateLine(identifier, line);
                             }
@@ -770,10 +828,11 @@ namespace CSV_SYSTEM_API
                     {
                         // 如果是非坐标行的标识符，但没有对应的聚合或标准元数据，则写入原始空行，
                         // 这种情况通常发生在 ProcessNonCoordinateLine 无法识别并填充的行
-                        writer.WriteLine(identifier); // 写入原始标识符，因为它在 orderedNonCoordinateLineIdentifiers 中
+                            writer.WriteLine(identifier); // 写入原始标识符，因为它在 orderedNonCoordinateLineIdentifiers 中
+                        
                     }
 
-                    if (identifier.Contains("Total Testing Time")||identifier.Contains("WAFER_ID")) // 使用 Contains 匹配
+                    if (identifier.Contains("Total Testing Time") || identifier.Contains("SBLOT Id")) // 在 Total Testing Time 或 SBLOT ID: 之后添加空行
                     {
                         writer.WriteLine(); // 在之后添加空行
                     }
