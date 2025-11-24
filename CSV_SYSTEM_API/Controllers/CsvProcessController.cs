@@ -94,8 +94,10 @@ namespace CSV_SYSTEM_API.Controllers
                 string outputBaseDirectory = $@"\\10.20.6.14\testdata\Data\{custid}\{device}\{wflot}\Final";
 
                 // 连接共享文件夹
-                var folderPassword = _configuration.GetConnectionString("sharedFolderConnectPassword");
-                var sharedFolderConnectResult = SharedFolderHelper.Connect(@"\\10.20.6.14\testdata", @"htsh\daizun", $"{folderPassword}");
+                string folderUsername = _configuration["SharedFolderSettings:Username"];
+                string folderPassword = _configuration["SharedFolderSettings:Password"];
+
+                var sharedFolderConnectResult = SharedFolderHelper.Connect(@"\\10.20.6.14\testdata", folderUsername, folderPassword);
                 try
                 {
                     // 检查目录是否存在，如果不存在则创建（包括所有必要的父目录）
@@ -124,7 +126,7 @@ namespace CSV_SYSTEM_API.Controllers
                     return NotFound($"指定的文件夹路径 \'{folderPath}\' 不存在。");
                 }
 
-                CsvDataProcessor fileGrouper = new CsvDataProcessor(_csvDataProcessorLogger, expectedGrossDie);
+                CsvDataProcessor fileGrouper = new CsvDataProcessor(_csvDataProcessorLogger, _configuration, expectedGrossDie);
                 Dictionary<string, List<FileInfo>> groupedFilesToMerge = fileGrouper.GetSortedCsvFiles(folderPath);
 
                 if (groupedFilesToMerge.Count == 0)
@@ -147,7 +149,7 @@ namespace CSV_SYSTEM_API.Controllers
                         _logger.LogInformation($"- {file.Name} (创建时间: {file.CreationTime})");
                     }
 
-                    CsvDataProcessor processor = new CsvDataProcessor(_csvDataProcessorLogger, expectedGrossDie);
+                    CsvDataProcessor processor = new CsvDataProcessor(_csvDataProcessorLogger, _configuration, expectedGrossDie);
 
                     if (!processor.ProcessFilesForMinMaxCoords(csvFilesForGroup))
                     {
