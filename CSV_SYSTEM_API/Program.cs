@@ -52,7 +52,7 @@ builder.Services.AddSwaggerGen();
                 var logger = provider.GetRequiredService<ILogger<CSV_SYSTEM_API.CsvDataProcessor>>();
                 var configuration = provider.GetRequiredService<IConfiguration>(); // 获取 IConfiguration
                 // 现在 CsvDataProcessor 构造函数接收 IConfiguration 作为参数
-                return new CSV_SYSTEM_API.CsvDataProcessor(logger, configuration);
+                return new CSV_SYSTEM_API.CsvDataProcessor(logger);
             });
 
 var app = builder.Build();
