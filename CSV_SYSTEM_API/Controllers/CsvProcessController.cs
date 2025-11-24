@@ -126,7 +126,7 @@ namespace CSV_SYSTEM_API.Controllers
                     return NotFound($"指定的文件夹路径 \'{folderPath}\' 不存在。");
                 }
 
-                CsvDataProcessor fileGrouper = new CsvDataProcessor(_csvDataProcessorLogger, _configuration, expectedGrossDie);
+                CsvDataProcessor fileGrouper = new CsvDataProcessor(_csvDataProcessorLogger, expectedGrossDie);
                 Dictionary<string, List<FileInfo>> groupedFilesToMerge = fileGrouper.GetSortedCsvFiles(folderPath);
 
                 if (groupedFilesToMerge.Count == 0)
@@ -149,7 +149,7 @@ namespace CSV_SYSTEM_API.Controllers
                         _logger.LogInformation($"- {file.Name} (创建时间: {file.CreationTime})");
                     }
 
-                    CsvDataProcessor processor = new CsvDataProcessor(_csvDataProcessorLogger, _configuration, expectedGrossDie);
+                    CsvDataProcessor processor = new CsvDataProcessor(_csvDataProcessorLogger,  expectedGrossDie);
 
                     if (!processor.ProcessFilesForMinMaxCoords(csvFilesForGroup))
                     {
