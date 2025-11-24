@@ -303,7 +303,7 @@ namespace CSV_SYSTEM_API
                     string[] part2=part1[1].Trim().Split('-');
                     standardMetadata["Wafer Id"] = $"Wafer Id:{part2[1].Trim()}" ;
                     standardMetadata["Lot Id"] = $"Lot Id:{part2[0].Trim()}";
-                    standardMetadata["SBLOT Id"]=$"SBLOT Id:{part2[1].Trim()}";
+                    standardMetadata["SBLOT_ID"]=$"SBLOT_ID:{part2[1].Trim()}";
                 }
 
                 if(identifier== "cp_setup_filename")
@@ -719,7 +719,7 @@ namespace CSV_SYSTEM_API
                                 {
                                     
                                     // 添加新的独立标识符
-                                    string[] newIdentifiers = { "Wafer Id", "Lot Id", "SBLOT Id" };
+                                    string[] newIdentifiers = { "Wafer Id", "Lot Id", "SBLOT_ID" };
                                     foreach (var newId in newIdentifiers)
                                     {
                                         if (!orderedNonCoordinateLineIdentifiers.Contains(newId))
@@ -832,7 +832,7 @@ namespace CSV_SYSTEM_API
                         
                     }
 
-                    if (identifier.Contains("Total Testing Time") || identifier.Contains("SBLOT Id")) // 在 Total Testing Time 或 SBLOT ID: 之后添加空行
+                    if (identifier.Contains("Total Testing Time") || identifier.Contains("SBLOT_ID")) // 在 Total Testing Time 或 SBLOT ID: 之后添加空行
                     {
                         writer.WriteLine(); // 在之后添加空行
                     }
