@@ -39,6 +39,60 @@ namespace CSV_SYSTEM_API
 
         public int ConsolidatedCoordinateDataCount => consolidatedCoordinateData.Count;
 
+        /// <summary>
+        /// 根据 deviceName (取前六位) 和 cpValue 构建预期的 Bias CSV 文件名。
+        /// </summary>
+        /// <returns>Bias CSV 文件的完整文件名，不包含路径，如果 deviceName 或 cpValue 为空，则返回空字符串。</returns>
+        private string GetBiasFilename()
+        {
+            if (string.IsNullOrEmpty(deviceName) || string.IsNullOrEmpty(cpValue))
+            {
+                return string.Empty;
+            }
+
+            // deviceName 取前六位
+            string devicePrefix = deviceName.Length >= 6 ? deviceName.Substring(0, 6) : deviceName;
+
+            return $"{devicePrefix}_{cpValue}.csv";
+        }
+
+        /// <summary>
+        /// 在指定的根目录下查找 "Bias" 文件夹，并在其中查找与 deviceName 和 cpValue 匹配的 CSV 文件。
+        /// </summary>
+        /// <param name="baseDirectory">程序运行的根目录，通常是应用程序的执行路径。</param>
+        /// <returns>如果找到匹配的 Bias CSV 文件，则返回其完整路径；否则返回空字符串。</returns>
+        private string FindBiasCsvFile(string baseDirectory)
+        {
+            string biasFolderName = "Bias";
+            string biasFolderPath = Path.Combine(baseDirectory, biasFolderName);
+
+            if (!Directory.Exists(biasFolderPath))
+            {
+                _logger.LogWarning($"警告：Bias 文件夹 '{biasFolderPath}' 不存在。");
+                return string.Empty;
+            }
+
+            string biasFilename = GetBiasFilename();
+            if (string.IsNullOrEmpty(biasFilename))
+            {
+                _logger.LogInformation("未生成 Bias CSV 文件名，跳过查找 Bias 文件。");
+                return string.Empty;
+            }
+
+            string biasFilePath = Path.Combine(biasFolderPath, biasFilename);
+
+            if (File.Exists(biasFilePath))
+            {
+                _logger.LogInformation($"已找到 Bias CSV 文件：'{biasFilePath}'");
+                return biasFilePath;
+            }
+            else
+            {
+                _logger.LogWarning($"警告：在 '{biasFolderPath}' 中未找到匹配的 Bias CSV 文件：'{biasFilename}'。");
+                return string.Empty;
+            }
+        }
+
         public CsvDataProcessor(ILogger<CsvDataProcessor> logger, long expectedGrossDie = 0)
         {
             _logger = logger;
@@ -861,6 +915,28 @@ namespace CSV_SYSTEM_API
                         writer.WriteLine(sline);
                     }
                     
+                }
+
+                // 在辅助坐标标题行之后，检查并写入 Bias CSV 文件内容
+                string baseDirectory = AppContext.BaseDirectory; // 获取当前应用程序的执行路径
+                string biasFilePath = FindBiasCsvFile(baseDirectory);
+
+                if (!string.IsNullOrEmpty(biasFilePath))
+                {
+                    _logger.LogInformation($"正在写入 Bias 文件内容：'{biasFilePath}'");
+                    try
+                    {
+                        string[] biasFileContent = File.ReadAllLines(biasFilePath);
+                        foreach (string biasLine in biasFileContent)
+                        {
+                            writer.WriteLine(biasLine);
+                        }
+                        //writer.WriteLine(); // 在 Bias 文件内容后添加一个空行
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, $"读取或写入 Bias 文件 '{biasFilePath}' 时发生错误：{ex.Message}");
+                    }
                 }
 
                 writer.WriteLine(); // 添加一个空行分隔标题和数据
